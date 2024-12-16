@@ -1,25 +1,30 @@
 const express = require('express');
 const db = require('../db/index');
-const router = express.router();
+const router = express.Router();
 const { auth } = require('../middleware/firebaseAuth');
 const multer = require('multer');
 const upload = multer({ dest: 'uploads/' });
 const qrcode = require('qrcode');
 
 // Authentication Routes
-router.post('/auth/verify', async (req, res) => {
+router.post('/verify', async (req, res) => {
     try {
-        const { user } = req;  // From Firebase auth middleware
+        console.log('Received auth request:', req.body);
+        const { email, name } = req.body;
+        
         const result = await db.query(
-            'INSERT INTO users (email, name) VALUES ($1, $2) ON CONFLICT (email) DO UPDATE SET last_login = CURRENT_TIMESTAMP RETURNING user_id',
-            [user.email, user.name]
+            'INSERT INTO users (email, name) VALUES ($1, $2) ON CONFLICT (email) DO UPDATE SET last_login_time = CURRENT_TIMESTAMP RETURNING user_id',
+            [email, name]
         );
+        
+        console.log('Database response:', result.rows[0]);
         res.json({ userId: result.rows[0].user_id });
     } catch (error) {
+        console.error('Verification error:', error);
         res.status(500).json({ error: 'Failed to verify user' });
     }
 });
-
+  
 // log mananegment route (create, create qrcode, )
 router.post('/logs', auth, async (req, res) => {
     const { title, description, fields } = req.body;
@@ -130,7 +135,7 @@ router.get('/logs/:logId/config', async (req, res) => {
 
 
 // route to add a review to a log
-route.post('/logs/:logId/reviews', upload.single('photo'), async (req, res) => {
+router.post('/logs/:logId/reviews', upload.single('photo'), async (req, res) => {
     const { logId } = req.params;
     const reviewData = req.body;
     const clientIp = req.ip;
