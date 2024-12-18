@@ -7,17 +7,22 @@ const upload = multer({ dest: 'uploads/' });
 const qrcode = require('qrcode');
 
 // Authentication Routes
+
+// POST endpoint to either update (last login time) or insert (new user).
 router.post('/verify', async (req, res) => {
     try {
+        // get the email + name from the request body from the clien, happens after firebase auth is already done
         console.log('Received auth request:', req.body);
         const { email, name } = req.body;
         
+        // insert or update operation (update if the user already exists), and return the user_id
         const result = await db.query(
             'INSERT INTO users (email, name) VALUES ($1, $2) ON CONFLICT (email) DO UPDATE SET last_login_time = CURRENT_TIMESTAMP RETURNING user_id',
             [email, name]
         );
         
         console.log('Database response:', result.rows[0]);
+        // send the user_id back to the client
         res.json({ userId: result.rows[0].user_id });
     } catch (error) {
         console.error('Verification error:', error);
@@ -25,8 +30,11 @@ router.post('/verify', async (req, res) => {
     }
 });
   
-// log mananegment route (create, create qrcode, )
+// log mananegment route (create, create qrcode)
+// creates a POST endpoint at logs. 'auth' ensures only authenicated users can create logs
+// make async because of the multiple db operations
 router.post('/logs', auth, async (req, res) => {
+    // get data from request body from client
     const { title, description, fields } = req.body;
     const user_id = req.body.uid;
 
@@ -34,9 +42,10 @@ router.post('/logs', auth, async (req, res) => {
         // get connection to client from the connection pool 
         const client = await db.pool.connect();
         try {
+            // use a database transaction to ensure consistency 
             await client.query('BEGIN');
 
-            // create log
+            // create a new log, and return its log_id
             const logResult = await client.query(
                 'INSERT INTO logs (user_id, title, descriptions) VALUES ($1, $2, $3) RETURNING log_id',
                 [userId, title, description]
@@ -52,7 +61,8 @@ router.post('/logs', auth, async (req, res) => {
                 [qrCodeUrl, logId]
             );
 
-            // create log fields
+            // create all the custom log fields
+            // loop through all of the fields and insert their properties
             for (const [index, fields] of fields.entries()) {
                 await client.query(
                     'INSERT INTO log_fields (log_id, field_name, is_enabled, is_required, display_order) VALUES ($1, $2, $3, $4, $5)',
@@ -60,9 +70,12 @@ router.post('/logs', auth, async (req, res) => {
                 );
             }
 
+            // commit the transaction
+            // send back the lodId and qrcode to the client
             await client.query('COMMIT');
             res.json({ logId, qrCodeUrl });
         } catch (error) {
+            // cancel transaction if there was an error
             await client.query('ROLLBACK');
             throw error;
         } finally {
@@ -75,8 +88,10 @@ router.post('/logs', auth, async (req, res) => {
 
 
 // route to fetch all logs for a given user
-router.post('/logs', auth, async (req, res) => {
+// creates a GET endpoint, user must be authenticated first
+router.get('/logs', auth, async (req, res) => {
     const userId = req.user.uid;
+    // set a limit of 10 logs per page to handle possibly large amounts of data
     const { page = 1, limit = 10, status  } = req.query;
     const offset = (page - 1) * limit;
 
@@ -95,14 +110,18 @@ router.post('/logs', auth, async (req, res) => {
         const query = `SELECT * FROM logs WHERE user_id = $1`;
         const params = [userId];
 
+        // conditionally add status filtering
         if (status) {
             query += ` AND status = $2`;
             params.push(status);
         }
 
+        // order logs from newest to oldest by default 
+        // limit the results per page, and add offset to jump to the right page
         query += ` ORDERED BY created_at DESC LIMIT $3 OFFSET $4`;
         params.push(limit, offset);
 
+        // execute the query and send back the results to the client
         const result = await db.query(query, params);
         res.status(200).json(result.rows);
 
@@ -115,14 +134,17 @@ router.post('/logs', auth, async (req, res) => {
     
 });
 
-// review submission routes
+// fetches config info for a specific log - tells us how a log's review form should be structured
 router.get('/logs/:logId/config', async (req, res) => {
     try {
+        // find the specific log and its information such as fields and if they are required
+        // build the correct form fields dynamically 
         const logResult = await db.query(
             'SELECT l.*, array_agg(json_build_object(\'name\', lf.field_name, \'required\', lf.is_required)) as fields FROM logs l LEFT JOIN log_fields lf ON l.log_id = lf.log_id WHERE l.log_id = $1 AND l.status = \'active\' GROUP BY l.log_id',
             [req.params.logId]
         );
 
+        // if a log doesn't exist, or its status is inactive
         if (logResult.rows.length === 0) {
             return res.status(404).json({ error: 'Log not found or inactive' });
         }
@@ -134,11 +156,12 @@ router.get('/logs/:logId/config', async (req, res) => {
 });
 
 
-// route to add a review to a log
+// creates a POST endpoint to recieve reviews for a specific log
+// upload.single(photo) handles the file submission
 router.post('/logs/:logId/reviews', upload.single('photo'), async (req, res) => {
-    const { logId } = req.params;
-    const reviewData = req.body;
-    const clientIp = req.ip;
+    const { logId } = req.params; // which log is being reviewd
+    const reviewData = req.body; // what the review content is
+    const clientIp = req.ip; // get the IP address to prevent spam
 
     try {
         // check for the rate limit
@@ -153,6 +176,7 @@ router.post('/logs/:logId/reviews', upload.single('photo'), async (req, res) => 
 
         const client = await db.pool.connection();
         try {
+            // initialize transaction
             await client.query('BEGIN');
 
             // create a new review
@@ -162,7 +186,7 @@ router.post('/logs/:logId/reviews', upload.single('photo'), async (req, res) => 
             );
             const reviewId = reviewResult.rows[0].review_id;
 
-            // store review field values
+            // store individual review field values
             for (const [field, values] in Object.entries(reviewData)) {
                 if (field !== 'name') { // we already stored the name
                     await client.query(
@@ -174,10 +198,11 @@ router.post('/logs/:logId/reviews', upload.single('photo'), async (req, res) => 
 
             // update review count
             await client.query(
-                'UPDATE log SET total_reviews = total_reviews + 1, last_review_at = CURRENT_TIMESTAMP WHERE log_is = $1',
+                'UPDATE log SET total_reviews = total_reviews + 1, last_review_at = CURRENT_TIMESTAMP WHERE log_id = $1',
                 [logId]
             );
 
+            // commit transaction
             await client.query('COMMIT');
             res.json({ reviewId });
         } catch (error) {
