@@ -8,6 +8,7 @@ import SignUp from './pages/SignUp';
 import Home from './pages/Home';
 import CreateLog from './pages/CreateLog';
 import ViewLogs from './pages/ViewLogs';
+import LogPage from './pages/LogPage';
 import PrivateRoute from './components/PrivateRoute';
 import './index.css';
 
@@ -45,6 +46,7 @@ export default function App() {
             <Route path="/" element={<Home />} />
             <Route path="/create-log" element={<CreateLog />} />
             <Route path="/view-logs" element={<ViewLogs />} />
+            <Route path="/logs/:logId" element={<LogPage />} />
           </Route>
         </Route>
       </Routes>

@@ -2,6 +2,7 @@
   "name": "frontend",
   "version": "0.1.0",
   "private": true,
+  "proxy": "http://localhost:5000",
   "dependencies": {
     "@heroicons/react": "^2.2.0",
     "@radix-ui/react-alert-dialog": "^1.1.4",
@@ -49,6 +50,7 @@
   },
   "devDependencies": {
     "@shadcn/ui": "^0.0.4",
-    "cross-env": "^7.0.3"
+    "cross-env": "^7.0.3",
+    "http-proxy-middleware": "^3.0.3"
   }
 }

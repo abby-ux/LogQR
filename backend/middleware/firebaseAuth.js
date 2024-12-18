@@ -11,13 +11,22 @@ admin.initializeApp({
 // Middleware to verify Firebase token
 const auth = async (req, res, next) => {
   try {
+    // Debug: Log the incoming authorization header
+    console.log('Auth header:', req.headers.authorization);
+
     const token = req.headers.authorization?.split('Bearer ')[1];
+
+    // Debug: Log if we found a token
+    console.log('Token extracted:', !!token);
     
     if (!token) {
       return res.status(401).json({ error: 'No token provided' });
     }
 
     const decodedToken = await admin.auth().verifyIdToken(token);
+    // Debug: Log successful token verification
+    console.log('Token verified for user:', decodedToken.uid);
+
     req.user = {
       uid: decodedToken.uid,
       email: decodedToken.email,
@@ -26,6 +35,7 @@ const auth = async (req, res, next) => {
     
     next();
   } catch (error) {
+    // Debug: Log the specific error
     console.error('Auth Middleware Error:', error);
     res.status(401).json({ error: 'Invalid token' });
   }

@@ -1,6 +1,7 @@
 const express = require('express');
 const db = require('../db/index');
 const router = express.Router();
+const admin = require('firebase-admin');
 const { auth } = require('../middleware/firebaseAuth');
 const multer = require('multer');
 const upload = multer({ dest: 'uploads/' });
@@ -11,22 +12,68 @@ const qrcode = require('qrcode');
 // POST endpoint to either update (last login time) or insert (new user).
 router.post('/verify', async (req, res) => {
     try {
-        // get the email + name from the request body from the clien, happens after firebase auth is already done
-        console.log('Received auth request:', req.body);
+        // Add logging to help debug
+        console.log('Received verify request:', {
+            headers: req.headers,
+            body: req.body
+        });
+
+        const token = req.headers.authorization?.split('Bearer ')[1];
+        
+        if (!token) {
+            return res.status(401).json({ error: 'No token provided' });
+        }
+
+        // Add try-catch specifically for token verification
+        let decodedToken;
+        try {
+            decodedToken = await admin.auth().verifyIdToken(token);
+        } catch (tokenError) {
+            console.error('Token verification failed:', tokenError);
+            return res.status(401).json({ error: 'Invalid token' });
+        }
+
         const { email, name } = req.body;
         
-        // insert or update operation (update if the user already exists), and return the user_id
+        if (!email) {
+            return res.status(400).json({ error: 'Email is required' });
+        }
+
+        // Add logging for database operation
+        console.log('Attempting database operation for:', { email, name });
+
         const result = await db.query(
-            'INSERT INTO users (email, name) VALUES ($1, $2) ON CONFLICT (email) DO UPDATE SET last_login_time = CURRENT_TIMESTAMP RETURNING user_id',
+            `INSERT INTO users (email, name, last_login_time) 
+             VALUES ($1, $2, CURRENT_TIMESTAMP) 
+             ON CONFLICT (email) 
+             DO UPDATE SET last_login_time = CURRENT_TIMESTAMP, name = EXCLUDED.name
+             RETURNING user_id`,
             [email, name]
         );
         
-        console.log('Database response:', result.rows[0]);
-        // send the user_id back to the client
+        // Add logging for successful operation
+        console.log('Database operation successful:', result.rows[0]);
+
         res.json({ userId: result.rows[0].user_id });
     } catch (error) {
-        console.error('Verification error:', error);
-        res.status(500).json({ error: 'Failed to verify user' });
+        // Enhanced error logging
+        console.error('Verification error details:', {
+            message: error.message,
+            stack: error.stack,
+            code: error.code
+        });
+        
+        // Send more specific error messages based on the type of error
+        if (error.code === '23505') { // Unique violation
+            res.status(409).json({ error: 'User already exists' });
+        } else if (error.code === '23502') { // Not null violation
+            res.status(400).json({ error: 'Missing required fields' });
+        } else {
+            res.status(500).json({ 
+                error: 'Failed to verify user',
+                details: process.env.NODE_ENV === 'development' ? error.message : undefined
+            });
+        }
     }
 });
   
@@ -34,55 +81,70 @@ router.post('/verify', async (req, res) => {
 // creates a POST endpoint at logs. 'auth' ensures only authenicated users can create logs
 // make async because of the multiple db operations
 router.post('/logs', auth, async (req, res) => {
-    // get data from request body from client
     const { title, description, fields } = req.body;
-    const user_id = req.body.uid;
+    const userId = req.user.uid;
+    const userEmail = req.user.email || '';
+    const userName = req.user.name || 'Anonymous';
+    
+    const client = await db.pool.connect();
 
     try {
-        // get connection to client from the connection pool 
-        const client = await db.pool.connect();
-        try {
-            // use a database transaction to ensure consistency 
-            await client.query('BEGIN');
+        await client.query('BEGIN');
 
-            // create a new log, and return its log_id
-            const logResult = await client.query(
-                'INSERT INTO logs (user_id, title, descriptions) VALUES ($1, $2, $3) RETURNING log_id',
-                [userId, title, description]
-            );
-            const logId = logResult.rows[0].log_id;
+        // First ensure the user exists - this is important for maintaining data integrity
+        let userResult = await client.query(
+            'SELECT user_id FROM users WHERE user_id = $1',
+            [userId]
+        );
 
-            // generate QR code
-            const qrCodeUrl = await QRCode.toDataURL(`${process.env.APP_URL}/review/${logId}`);
-
-            // update log with qr code url
+        if (userResult.rows.length === 0) {
+            // If the user doesn't exist, create them first
             await client.query(
-                'UPDATE logs SET qr_code_url = $1 WHERE log_id = $2',
-                [qrCodeUrl, logId]
+                'INSERT INTO users (user_id, email, name) VALUES ($1, $2, $3)',
+                [userId, userEmail, userName]
             );
-
-            // create all the custom log fields
-            // loop through all of the fields and insert their properties
-            for (const [index, fields] of fields.entries()) {
-                await client.query(
-                    'INSERT INTO log_fields (log_id, field_name, is_enabled, is_required, display_order) VALUES ($1, $2, $3, $4, $5)',
-                    [logId, field.name, field.enabled, field.required, index]
-                );
-            }
-
-            // commit the transaction
-            // send back the lodId and qrcode to the client
-            await client.query('COMMIT');
-            res.json({ logId, qrCodeUrl });
-        } catch (error) {
-            // cancel transaction if there was an error
-            await client.query('ROLLBACK');
-            throw error;
-        } finally {
-            client.release();
         }
+
+        // Create the log entry
+        const logResult = await client.query(
+            'INSERT INTO logs (user_id, title, description) VALUES ($1, $2, $3) RETURNING log_id',
+            [userId, title, description]
+        );
+        const logId = logResult.rows[0].log_id;
+
+        // Generate the QR code for this log
+        const qrCodeUrl = await qrcode.toDataURL(`${process.env.APP_URL}/review/${logId}`);
+        await client.query(
+            'UPDATE logs SET qr_code_url = $1 WHERE log_id = $2',
+            [qrCodeUrl, logId]
+        );
+
+        // Now create the log fields, using the array index for display_order
+        // This ensures fields appear in the same order they were specified
+        for (let i = 0; i < fields.length; i++) {
+            const field = fields[i];
+            await client.query(
+                `INSERT INTO log_fields 
+                (log_id, field_name, is_enabled, is_required, display_order) 
+                VALUES ($1, $2, $3, $4, $5)`,
+                [logId, field.name, field.enabled, field.required, i]
+            );
+        }
+
+        await client.query('COMMIT');
+        res.json({ logId, qrCodeUrl });
+
     } catch (error) {
-        res.status(500).json({ error: 'Failed to create log' });
+        await client.query('ROLLBACK');
+        console.error('Error in log creation:', {
+            errorMessage: error.message,
+            userId,
+            title,
+            fieldsCount: fields?.length
+        });
+        res.status(500).json({ error: 'Failed to create log', details: error.message });
+    } finally {
+        client.release();
     }
 });
 
