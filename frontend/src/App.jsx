@@ -9,6 +9,7 @@ import Home from './pages/Home';
 import CreateLog from './pages/CreateLog';
 import ViewLogs from './pages/ViewLogs';
 import PrivateRoute from './components/PrivateRoute';
+import './index.css';
 
 export default function App() {
     // initial value of user is set to null, we can use setUser to change that value
