@@ -1,8 +1,13 @@
-// require('dotenv').config();
+const path = require('path');
+console.log('Current directory:', __dirname);
+console.log('Loading .env file from:', path.join(__dirname, '.env'));
+require('dotenv').config({ path: path.join(__dirname, '.env') });
+
 const express = require('express');
 const cors = require('cors');
 const db = require('./db/index');  // Fix db path
 const apiRoutes = require('./routes/api'); // Add this line
+
 
 const app = express();
 

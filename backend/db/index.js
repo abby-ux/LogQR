@@ -2,36 +2,45 @@ const { Pool } = require('pg');
 require('dotenv').config();
 
 
-const isTest = process.env.NODE_ENV === 'test';
+// Create the configuration object with proper validation
+const createConfig = () => {
+    // We'll use environment variables with fallbacks for safety
+    const config = {
+        user: process.env.DB_USER || 'postgres',
+        host: process.env.DB_HOST || 'localhost',
+        database: process.env.DB_NAME || 'logreview_db',
+        password: process.env.DB_PASSWORD,
+        port: process.env.DB_PORT ? parseInt(process.env.DB_PORT) : 5432
+    };
 
-console.log('Database Configuration (without sensitive data):', {
-    user: process.env.DB_USER,
-    host: process.env.DB_HOST,
-    database: process.env.DB_NAME,
-    port: process.env.DB_PORT,
-    // We intentionally don't log the password for security
-});
+    // Add validation to prevent using port as host
+    if (config.host === '5432' || config.host === 5432) {
+        console.log('Correcting invalid host configuration');
+        config.host = 'localhost';
+    }
 
-const pool = new Pool({
-    user: process.env.DB_USER || 'postgres',
-    host: process.env.DB_HOST || 'localhost',
-    database: process.env.DB_NAME || 'logreview_db',
-    password: process.env.DB_PASSWORD, 
-    port: process.env.DB_PORT || 5432,
-    // Add some connection handling parameters
-    connectionTimeoutMillis: 5000,  // How long to wait for connection
-    idleTimeoutMillis: 30000       // How long a client is allowed to remain idle
-});
+    return config;
+};
 
+// Initialize the pool with our validated configuration
+const pool = new Pool(createConfig());
+
+// Export both the pool and our helper functions
 module.exports = {
     query: (text, params) => pool.query(text, params),
-    pool,  // Export the pool directly
+    pool, // Now we're explicitly exporting the pool
     testConnection: async () => {
         try {
             const res = await pool.query('SELECT NOW()');
-            console.log('Database connected:', res.rows[0]);
+            console.log('Database connected successfully:', res.rows[0]);
         } catch (err) {
             console.error('Database connection error:', err);
+            console.error('Connection attempted with:', {
+                user: pool.options.user,
+                host: pool.options.host,
+                database: pool.options.database,
+                port: pool.options.port
+            });
         }
     }
 };

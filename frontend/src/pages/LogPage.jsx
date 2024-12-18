@@ -6,14 +6,16 @@ import { Alert, AlertDescription } from '../components/ui/alert';
 import { AlertCircle, Printer, Share2 } from 'lucide-react';
 
 const LogPage = () => {
+  // get the logId from /logs/:logId
   const { logId } = useParams();
   const location = useLocation();
-  const [log, setLog] = useState(null);
+  const [log, setLog] = useState(null); // fetch the log from the server
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // we are initially loading data
   
   // If we have a QR code URL from navigation state, use it
   const initialQrCode = location.state?.qrCodeUrl;
+  // might have to qrcode value, might not
   const [qrCodeUrl, setQrCodeUrl] = useState(initialQrCode);
 
   useEffect(() => {
