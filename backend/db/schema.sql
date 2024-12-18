@@ -1,6 +1,6 @@
 -- First, let's create the users table
 CREATE TABLE users (
-    user_id SERIAL PRIMARY KEY,
+    user_id VARCHAR(128) PRIMARY KEY,
     email VARCHAR(255) UNIQUE NOT NULL,
     name VARCHAR(100) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

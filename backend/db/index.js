@@ -1,39 +1,37 @@
 const { Pool } = require('pg');
 require('dotenv').config();
 
-// Validate required environment variables
-const requiredEnvVars = ['DB_PASSWORD', 'DB_USER', 'DB_HOST', 'DB_PORT', 'DB_NAME'];
-const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
 
-if (missingEnvVars.length > 0) {
-    throw new Error(`Missing required environment variables: ${missingEnvVars.join(', ')}`);
-}
+const isTest = process.env.NODE_ENV === 'test';
 
-const pool = new Pool({
+console.log('Database Configuration (without sensitive data):', {
     user: process.env.DB_USER,
     host: process.env.DB_HOST,
     database: process.env.DB_NAME,
-    password: process.env.DB_PASSWORD,
     port: process.env.DB_PORT,
+    // We intentionally don't log the password for security
+});
+
+const pool = new Pool({
+    user: process.env.DB_USER || 'postgres',
+    host: process.env.DB_HOST || 'localhost',
+    database: process.env.DB_NAME || 'logreview_db',
+    password: process.env.DB_PASSWORD, 
+    port: process.env.DB_PORT || 5432,
+    // Add some connection handling parameters
+    connectionTimeoutMillis: 5000,  // How long to wait for connection
+    idleTimeoutMillis: 30000       // How long a client is allowed to remain idle
 });
 
 module.exports = {
     query: (text, params) => pool.query(text, params),
+    pool,  // Export the pool directly
     testConnection: async () => {
         try {
             const res = await pool.query('SELECT NOW()');
-            console.log('Database connected successfully:', res.rows[0]);
-            return true;
+            console.log('Database connected:', res.rows[0]);
         } catch (err) {
-            console.error('Database connection error:', err.message);
-            console.error('Current connection settings:', {
-                user: process.env.DB_USER,
-                host: process.env.DB_HOST,
-                database: process.env.DB_NAME,
-                port: process.env.DB_PORT,
-                // Not logging password for security reasons
-            });
-            return false;
+            console.error('Database connection error:', err);
         }
     }
 };

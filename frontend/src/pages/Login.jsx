@@ -11,27 +11,47 @@ export default function Login() {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-    try {
-        // First, authenticate with Firebase
-        const userCredential = await signInWithEmailAndPassword(auth, email, password);
-        
-        // Then, verify with your backend
-        const response = await fetch('http://localhost:5000/auth/verify', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${await userCredential.user.getIdToken()}`
+        try {
+            // First, authenticate with Firebase
+            const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    
+            // Get the token and store it
+            const token = await userCredential.user.getIdToken();
+            localStorage.setItem('token', token); 
+            
+            // Add timeout to prevent hanging requests
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000);
+    
+            // Then, verify with your backend
+            const response = await fetch('http://localhost:5000/api/verify', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ 
+                    email, 
+                    name: userCredential.user.displayName 
+                }),
+                signal: controller.signal
+            });
+            
+            clearTimeout(timeoutId);
+    
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to verify with backend');
             }
-        });
-        
-        if (!response.ok) {
-            throw new Error('Failed to verify with backend');
+    
+            const userData = await response.json();
+            console.log('Backend verification successful:', userData);
+            
+            navigate('/');
+        } catch (error) {
+            console.error('Login error:', error);
+            setError(error.message || 'Failed to log in. Please check your credentials.');
         }
-        
-        navigate('/');
-    } catch (error) {
-        setError('Failed to log in. Please check your credentials.');
-    }
     }
 
     return (
