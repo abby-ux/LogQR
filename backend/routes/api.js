@@ -42,13 +42,22 @@ router.post('/verify', async (req, res) => {
         // Add logging for database operation
         console.log('Attempting database operation for:', { email, name });
 
+
+        // const exists = await db.query(
+        //     `SELECT * FROM users WHERE user_id = $1`,
+        //     [decodedToken]
+        // );
+
+
+
+
         const result = await db.query(
-            `INSERT INTO users (email, name, last_login_time) 
-             VALUES ($1, $2, CURRENT_TIMESTAMP) 
+            `INSERT INTO users (user_id, email, name, last_login_time) 
+             VALUES ($1, $2, $3, CURRENT_TIMESTAMP) 
              ON CONFLICT (email) 
              DO UPDATE SET last_login_time = CURRENT_TIMESTAMP, name = EXCLUDED.name
              RETURNING user_id`,
-            [email, name]
+            [decodedToken, email, name]
         );
         
         // Add logging for successful operation
@@ -151,49 +160,74 @@ router.post('/logs', auth, async (req, res) => {
 
 // route to fetch all logs for a given user
 // creates a GET endpoint, user must be authenticated first
+// GET endpoint to fetch all logs for a user with pagination
 router.get('/logs', auth, async (req, res) => {
-    const userId = req.user.uid;
-    // set a limit of 10 logs per page to handle possibly large amounts of data
-    const { page = 1, limit = 10, status  } = req.query;
-    const offset = (page - 1) * limit;
-
-    // validate input
-    // ...
-
     try {
-        // verify that the user exists
-        // const user = await new Promise((resolve, reject) => {
-        //     db.get(`SELECT * FROM logs WHERE user_id = ?`, [userId], (err, row) => {
-        //         if (err) reject (err);
-        //         resolve(row);
-        //     });
-        // });
+        const userId = req.user.uid;
+        
+        // Extract and validate query parameters
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const status = req.query.status;
+        
+        // Validate page and limit
+        if (page < 1) {
+            return res.status(400).json({ error: 'Page must be greater than 0' });
+        }
+        if (limit < 1 || limit > 100) {
+            return res.status(400).json({ error: 'Limit must be between 1 and 100' });
+        }
 
-        const query = `SELECT * FROM logs WHERE user_id = $1`;
-        const params = [userId];
+        // Calculate offset
+        const offset = (page - 1) * limit;
 
-        // conditionally add status filtering
+        // Build query and params array
+        let query = `
+            SELECT 
+                l.*,
+                COUNT(*) OVER() as total_count
+            FROM logs l
+            WHERE l.user_id = $1
+        `;
+        let params = [userId];
+        let paramCount = 1;
+
+        // Add status filter if provided
         if (status) {
-            query += ` AND status = $2`;
+            paramCount++;
+            query += ` AND l.status = $${paramCount}`;
             params.push(status);
         }
 
-        // order logs from newest to oldest by default 
-        // limit the results per page, and add offset to jump to the right page
-        query += ` ORDERED BY created_at DESC LIMIT $3 OFFSET $4`;
+        // Add ordering and pagination
+        query += ` ORDER BY l.created_at DESC LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`;
         params.push(limit, offset);
 
-        // execute the query and send back the results to the client
+        // Execute query
         const result = await db.query(query, params);
-        res.status(200).json(result.rows);
+        
+        // Extract total count and format response
+        const totalCount = result.rows[0]?.total_count || 0;
+        const totalPages = Math.ceil(totalCount / limit);
 
+        // Return paginated response
+        res.status(200).json({
+            logs: result.rows.map(row => {
+                const { total_count, ...logData } = row;
+                return logData;
+            }),
+            pagination: {
+                current_page: page,
+                total_pages: totalPages,
+                total_records: parseInt(totalCount),
+                limit: limit
+            }
+        });
 
     } catch (error) {
-        console.log('Failed to fetch logs', error);
-        res.status(500).json({ message: 'Failed to fetch logs.' });
+        console.error('Failed to fetch logs:', error);
+        res.status(500).json({ error: 'Failed to fetch logs' });
     }
-  
-    
 });
 
 // fetches config info for a specific log - tells us how a log's review form should be structured

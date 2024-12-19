@@ -13,25 +13,31 @@ const LogPage = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true); // we are initially loading data
   
-  // If we have a QR code URL from navigation state, use it
+  // If we have a QR code URL passed from navigation state, use it
   const initialQrCode = location.state?.qrCodeUrl;
   // might have to qrcode value, might not
   const [qrCodeUrl, setQrCodeUrl] = useState(initialQrCode);
 
   useEffect(() => {
+    // main function to get log info
+    // async for the api request, because it takes time
     const fetchLogDetails = async () => {
       try {
+        // make api request
         const response = await fetch(`/api/logs/${logId}/config`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token')}`
           }
         });
 
+        // check if the response was successful
         if (!response.ok) {
           throw new Error('Failed to fetch log details');
         }
 
+        // parse the json response
         const data = await response.json();
+        // update the component's state with the log data
         setLog(data);
         // If we didn't get QR code from navigation, use the one from the API
         if (!qrCodeUrl) {
@@ -40,16 +46,19 @@ const LogPage = () => {
       } catch (err) {
         setError(err.message);
       } finally {
+        // clean up code, set loading to false
         setLoading(false);
       }
     };
 
     fetchLogDetails();
-  }, [logId, qrCodeUrl]);
+  }, [logId, qrCodeUrl]); // dependencies array -- if either logId or qrCodeUrl changes, the effect will run again
 
   const handlePrint = () => {
     // Open a new window with just the QR code for printing
+    // '', '', blank URL and window name, dimensions
     const printWindow = window.open('', '', 'width=600,height=600');
+    // write html content to the new window
     printWindow.document.write(`
       <html>
         <head><title>Print QR Code</title></head>
@@ -63,11 +72,12 @@ const LogPage = () => {
     `);
     printWindow.document.close();
     printWindow.focus();
-    printWindow.print();
-    printWindow.close();
+    // printWindow.print();
+    // printWindow.close();
   };
 
   const handleShare = async () => {
+    // feature availble on modern mobile devices
     if (navigator.share) {
       try {
         await navigator.share({

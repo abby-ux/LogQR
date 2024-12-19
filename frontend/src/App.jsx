@@ -9,6 +9,7 @@ import Home from './pages/Home';
 import CreateLog from './pages/CreateLog';
 import ViewLogs from './pages/ViewLogs';
 import LogPage from './pages/LogPage';
+import ViewLog from './pages/ViewLog';
 import PrivateRoute from './components/PrivateRoute';
 import './index.css';
 
@@ -47,6 +48,7 @@ export default function App() {
             <Route path="/create-log" element={<CreateLog />} />
             <Route path="/view-logs" element={<ViewLogs />} />
             <Route path="/logs/:logId" element={<LogPage />} />
+            <Route path="/logs/:logId/reviews" element={<ViewLog />} />
           </Route>
         </Route>
       </Routes>
