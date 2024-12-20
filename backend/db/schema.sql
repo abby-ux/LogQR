@@ -43,8 +43,7 @@ CREATE TABLE reviews (
     submission_date DATE DEFAULT CURRENT_DATE,
     ip_address VARCHAR(45),
     status VARCHAR(20) DEFAULT 'visible',
-    CONSTRAINT valid_review_status CHECK (status IN ('visible', 'hidden', 'flagged')),
-    CONSTRAINT unique_review_per_ip_per_day UNIQUE (log_id, ip_address, submission_date)
+    CONSTRAINT valid_review_status CHECK (status IN ('visible', 'hidden', 'flagged'))
 );
 
 -- Create the review_field_values table

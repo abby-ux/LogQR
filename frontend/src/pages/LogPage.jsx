@@ -77,13 +77,15 @@ const LogPage = () => {
   };
 
   const handleShare = async () => {
-    // feature availble on modern mobile devices
+    // Construct the review URL
+    const reviewUrl = `${window.location.origin}/review/${logId}`;
+    
     if (navigator.share) {
       try {
         await navigator.share({
           title: log?.title,
           text: log?.description,
-          url: window.location.href
+          url: reviewUrl // Use review URL instead of current URL
         });
       } catch (err) {
         if (err.name !== 'AbortError') {
@@ -91,8 +93,8 @@ const LogPage = () => {
         }
       }
     } else {
-      // Fallback to copying URL to clipboard
-      navigator.clipboard.writeText(window.location.href)
+      // Fallback to copying review URL to clipboard
+      navigator.clipboard.writeText(reviewUrl)
         .then(() => alert('Link copied to clipboard!'))
         .catch(() => setError('Failed to copy link'));
     }

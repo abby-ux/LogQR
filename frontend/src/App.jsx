@@ -12,6 +12,8 @@ import LogPage from './pages/LogPage';
 import ViewLog from './pages/ViewLog';
 import PrivateRoute from './components/PrivateRoute';
 import './index.css';
+import ReviewForm from './pages/ReviewForm';
+import ViewReview from './pages/ViewReview';
 
 export default function App() {
     // initial value of user is set to null, we can use setUser to change that value
@@ -49,6 +51,8 @@ export default function App() {
             <Route path="/view-logs" element={<ViewLogs />} />
             <Route path="/logs/:logId" element={<LogPage />} />
             <Route path="/logs/:logId/reviews" element={<ViewLog />} />
+            <Route path="/review/:logId" element={<ReviewForm />} />
+            <Route path="/logs/:logId/reviews/:reviewId" element={<ViewReview />} />
           </Route>
         </Route>
       </Routes>

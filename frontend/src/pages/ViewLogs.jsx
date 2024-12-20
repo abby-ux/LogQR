@@ -3,7 +3,17 @@ import { useNavigate } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Alert, AlertDescription } from '../components/ui/alert';
-import { AlertCircle, Clock, User, MessageSquare, ChevronRight } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../components/ui/alert-dialog";
+import { AlertCircle, Clock, User, MessageSquare, ChevronRight, Filter, Trash2 } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -18,6 +28,9 @@ const ViewLogs = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [sortOrder, setSortOrder] = useState('newest');
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [logToDelete, setLogToDelete] = useState(null);
   const navigate = useNavigate();
 
   const fetchLogs = async (page) => {
@@ -43,6 +56,28 @@ const ViewLogs = () => {
     }
   };
 
+  const handleDelete = async (logId) => {
+    try {
+      const response = await fetch(`http://localhost:5000/api/logs/${logId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete log');
+      }
+
+      // Remove the deleted log from the state
+      setLogs(logs.filter(log => log.log_id !== logId));
+      setDeleteDialogOpen(false);
+      setLogToDelete(null);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
   useEffect(() => {
     fetchLogs(currentPage);
   }, [currentPage]);
@@ -61,6 +96,22 @@ const ViewLogs = () => {
 
   const handleLogClick = (logId) => {
     navigate(`/logs/${logId}/reviews`);
+  };
+
+  const handleDeleteClick = (e, log) => {
+    e.stopPropagation(); // Prevent log click event
+    setLogToDelete(log);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleSortChange = (value) => {
+    setSortOrder(value);
+    const sortedLogs = [...logs].sort((a, b) => {
+      const dateA = new Date(a.created_at);
+      const dateB = new Date(b.created_at);
+      return value === 'newest' ? dateB - dateA : dateA - dateB;
+    });
+    setLogs(sortedLogs);
   };
 
   if (loading) {
@@ -87,6 +138,18 @@ const ViewLogs = () => {
               </p>
             )}
           </div>
+
+          <Select value={sortOrder} onValueChange={handleSortChange}>
+            <SelectTrigger className="w-40">
+              <Filter className="w-4 h-4 mr-2" />
+              <SelectValue placeholder="Sort by" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="newest">Newest First</SelectItem>
+              <SelectItem value="oldest">Oldest First</SelectItem>
+            </SelectContent>
+          </Select>
+
           <Button
             onClick={() => navigate('/create-log')}
             className="bg-blue-600 hover:bg-blue-700"
@@ -142,7 +205,17 @@ const ViewLogs = () => {
                             )}
                           </div>
                         </div>
-                        <ChevronRight className="h-5 w-5 text-gray-400" />
+                        <div className="flex items-center space-x-4">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="text-red-500 hover:text-red-600 hover:bg-red-50"
+                            onClick={(e) => handleDeleteClick(e, log)}
+                          >
+                            <Trash2 className="h-5 w-5" />
+                          </Button>
+                          <ChevronRight className="h-5 w-5 text-gray-400" />
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
@@ -187,6 +260,27 @@ const ViewLogs = () => {
           )}
         </CardContent>
       </Card>
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the log "{logToDelete?.title}" and all its reviews.
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-500 hover:bg-red-600"
+              onClick={() => handleDelete(logToDelete?.log_id)}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
