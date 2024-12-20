@@ -7,6 +7,14 @@ import { Textarea } from '../components/ui/textarea';
 import { Label } from '../components/ui/label';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { Alert, AlertDescription } from '../components/ui/alert';
+import { Checkbox } from '../components/ui/checkbox';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../components/ui/select";
 
 const ReviewForm = () => {
   const { logId } = useParams();
@@ -15,7 +23,49 @@ const ReviewForm = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [logConfig, setLogConfig] = useState(null);
-  const [formData, setFormData] = useState({});
+  
+  // State for form data
+  const [formData, setFormData] = useState({
+    name: '',
+    photo: null,
+    review: '',
+    note: '',
+    visitReasons: {
+      usual: false,
+      injury: false,
+      pills: false,
+      teeth: false,
+      bored: false,
+      curious: false,
+      phoneConvo: false,
+      crying: false,
+      break: false,
+      mouthwash: false,
+      sick: false,
+      tissue: false,
+      other: false
+    },
+    timeSpent: {
+      value: '',
+      unit: 'minutes'
+    },
+    topicsPondered: {
+      past: false,
+      future: false,
+      morality: false,
+      butts: false,
+      love: false,
+      money: false,
+      politics: false,
+      weekend: false,
+      work: false,
+      aliens: false,
+      garlicBread: false,
+      business: false,
+      other: false
+    },
+    finalNotes: ''
+  });
 
   useEffect(() => {
     const fetchLogConfig = async () => {
@@ -26,13 +76,6 @@ const ReviewForm = () => {
         }
         const data = await response.json();
         setLogConfig(data);
-        
-        // Initialize form data based on fields
-        const initialData = {};
-        data.fields.forEach(field => {
-          initialData[field.name] = '';
-        });
-        setFormData(initialData);
       } catch (err) {
         setError(err.message);
       } finally {
@@ -43,21 +86,34 @@ const ReviewForm = () => {
     fetchLogConfig();
   }, [logId]);
 
-  const handleInputChange = (fieldName, value) => {
+  const handleVisitReasonChange = (reason) => {
     setFormData(prev => ({
       ...prev,
-      [fieldName]: value
+      visitReasons: {
+        ...prev.visitReasons,
+        [reason]: !prev.visitReasons[reason]
+      }
     }));
   };
 
-  const handleFileChange = (event) => {
-    const file = event.target.files[0];
-    if (file) {
-      setFormData(prev => ({
-        ...prev,
-        photo: file
-      }));
-    }
+  const handleTopicChange = (topic) => {
+    setFormData(prev => ({
+      ...prev,
+      topicsPondered: {
+        ...prev.topicsPondered,
+        [topic]: !prev.topicsPondered[topic]
+      }
+    }));
+  };
+
+  const handleTimeChange = (field, value) => {
+    setFormData(prev => ({
+      ...prev,
+      timeSpent: {
+        ...prev.timeSpent,
+        [field]: value
+      }
+    }));
   };
 
   const handleSubmit = async (e) => {
@@ -65,23 +121,32 @@ const ReviewForm = () => {
     setSubmitting(true);
     setError('');
 
+    console.log('Current formData:', formData);
     try {
-      // Validate required fields
-      const missingFields = logConfig.fields
-        .filter(field => field.required && !formData[field.name])
-        .map(field => field.name);
-
-      if (missingFields.length > 0) {
-        throw new Error(`Please fill out the following required fields: ${missingFields.join(', ')}`);
-      }
-
-      // Create FormData for multipart/form-data (needed for file upload)
       const submitData = new FormData();
-      Object.entries(formData).forEach(([key, value]) => {
-        submitData.append(key, value);
-      });
 
-      const response = await fetch(`http://localhost:5000/api/logs/${logId}/reviews`, {
+      if (formData.name) {
+        submitData.append('name', formData.name);
+      }
+      
+      // Add all form data
+      Object.entries(formData.visitReasons)
+        .filter(([_, checked]) => checked)
+        .forEach(([reason]) => {
+          submitData.append('visitReasons[]', reason);
+        });
+
+      submitData.append('timeSpent', JSON.stringify(formData.timeSpent));
+
+      Object.entries(formData.topicsPondered)
+        .filter(([_, checked]) => checked)
+        .forEach(([topic]) => {
+          submitData.append('topicsPondered[]', topic);
+        });
+
+      submitData.append('finalNotes', formData.finalNotes);
+
+      const response = await fetch(`/api/logs/${logId}/reviews`, {
         method: 'POST',
         body: submitData
       });
@@ -119,7 +184,7 @@ const ReviewForm = () => {
           <CardContent className="p-8">
             <Alert className="bg-green-50 border-green-200">
               <AlertDescription className="text-green-800">
-                Thank you for your review! It has been submitted successfully.
+                Thank you for your review! Your bathroom visit has been documented.
               </AlertDescription>
             </Alert>
           </CardContent>
@@ -132,9 +197,14 @@ const ReviewForm = () => {
     <div className="container mx-auto max-w-2xl py-8">
       <Card>
         <CardHeader>
-          <CardTitle>{logConfig?.title || 'Submit Review'}</CardTitle>
+          <CardTitle>{logConfig?.title || 'Bathroom Visit Log'}</CardTitle>
         </CardHeader>
         <CardContent>
+            {/* Debug output */}
+        {/* <div className="mb-4 p-4 bg-gray-100 rounded">
+          <pre>{JSON.stringify(logConfig, null, 2)}</pre>
+        </div> */}
+
           <form onSubmit={handleSubmit} className="space-y-6">
             {error && (
               <Alert variant="destructive">
@@ -143,42 +213,185 @@ const ReviewForm = () => {
               </Alert>
             )}
 
-            {logConfig?.fields.map((field) => (
-              <div key={field.name} className="space-y-2">
-                <Label htmlFor={field.name} className="capitalize">
-                  {field.name} {field.required && <span className="text-red-500">*</span>}
-                </Label>
-                
-                {field.name === 'photo' ? (
-                  <Input
-                    id={field.name}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleFileChange}
-                    className="cursor-pointer"
-                    required={field.required}
-                  />
-                ) : field.name === 'review' ? (
-                  <Textarea
-                    id={field.name}
-                    value={formData[field.name] || ''}
-                    onChange={(e) => handleInputChange(field.name, e.target.value)}
-                    placeholder={`Enter your ${field.name}`}
-                    className="h-32"
-                    required={field.required}
-                  />
-                ) : (
-                  <Input
-                    id={field.name}
-                    type="text"
-                    value={formData[field.name] || ''}
-                    onChange={(e) => handleInputChange(field.name, e.target.value)}
-                    placeholder={`Enter your ${field.name}`}
-                    required={field.required}
-                  />
-                )}
-              </div>
-            ))}
+            {logConfig?.fields? (
+            logConfig.fields.map((field) => {
+              switch (field.name) {
+                case 'visitReasons':
+                  return   (
+                    <div key={field.name} className="space-y-4">
+                      <Label>Reason for visit (check all that apply)</Label>
+                      <div className="grid grid-cols-2 gap-4">
+                        {Object.entries({
+                          usual: "The usual",
+                          injury: "Minor injury",
+                          pills: "Looking for pills",
+                          teeth: "Checking my teeth",
+                          bored: "Bored",
+                          curious: "Curious",
+                          phoneConvo: "Phone convo",
+                          crying: "Crying in private",
+                          break: "I just need a break",
+                          mouthwash: "Hoping to find some mouthwash",
+                          sick: "I might be getting sick",
+                          tissue: "Need a tissue",
+                          other: "Other"
+                        }).map(([key, label]) => (
+                          <div key={key} className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`reason-${key}`}
+                              checked={formData.visitReasons[key]}
+                              onCheckedChange={() => handleVisitReasonChange(key)}
+                              required={field.required}
+                            />
+                            <Label htmlFor={`reason-${key}`}>{label}</Label>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+
+                case 'timeSpent':
+                  return   (
+                    <div key={field.name} className="space-y-4">
+                      <Label>Time spent gazing in mirror</Label>
+                      <div className="flex space-x-4">
+                        <Input
+                          type="number"
+                          value={formData.timeSpent.value}
+                          onChange={(e) => handleTimeChange('value', e.target.value)}
+                          className="w-24"
+                          min="0"
+                          required={field.required}
+                        />
+                        <Select
+                          value={formData.timeSpent.unit}
+                          onValueChange={(value) => handleTimeChange('unit', value)}
+                        >
+                          <SelectTrigger className="w-32">
+                            <SelectValue placeholder="Select unit" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="seconds">Seconds</SelectItem>
+                            <SelectItem value="minutes">Minutes</SelectItem>
+                            <SelectItem value="hours">Hours</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  );
+
+                case 'topicsPondered':
+                  return   (
+                    <div key={field.name} className="space-y-4">
+                      <Label>Topics pondered during visit</Label>
+                      <div className="grid grid-cols-2 gap-4">
+                        {Object.entries({
+                          past: "The past",
+                          future: "The future",
+                          morality: "Morality",
+                          butts: "Butts",
+                          love: "Love",
+                          money: "Money",
+                          politics: "Politics",
+                          weekend: "Weekend plans",
+                          work: "Work",
+                          aliens: "Aliens",
+                          garlicBread: "Cheesy garlic bread",
+                          business: "Business at hand",
+                          other: "Other"
+                        }).map(([key, label]) => (
+                          <div key={key} className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`topic-${key}`}
+                              checked={formData.topicsPondered[key]}
+                              onCheckedChange={() => handleTopicChange(key)}
+                              required={field.required}
+                            />
+                            <Label htmlFor={`topic-${key}`}>{label}</Label>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+
+                case 'finalNotes':
+                  return  (
+                    <div key={field.name} className="space-y-2">
+                      <Label htmlFor="finalNotes">Final notes before returning to civilization</Label>
+                      <Textarea
+                        id="finalNotes"
+                        value={formData.finalNotes}
+                        onChange={(e) => setFormData(prev => ({
+                          ...prev,
+                          finalNotes: e.target.value
+                        }))}
+                        placeholder="Share your final thoughts..."
+                        className="h-32"
+                        required={field.required}
+                      />
+                    </div>
+                  );
+
+                // Handle basic fields
+                case 'name':
+                  return  (
+                    <div key={field.name} className="space-y-2">
+                      <Label htmlFor="name">Name</Label>
+                      <Input
+                        id="name"
+                        value={formData.name || ''}
+                        onChange={(e) => setFormData(prev => ({
+                          ...prev,
+                          name: e.target.value
+                        }))}
+                        placeholder="Enter your name"
+                        required={field.required}
+                      />
+                    </div>
+                  );
+
+                case 'photo':
+                  return   (
+                    <div key={field.name} className="space-y-2">
+                      <Label htmlFor="photo">Photo</Label>
+                      <Input
+                        id="photo"
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => setFormData(prev => ({
+                          ...prev,
+                          photo: e.target.files[0]
+                        }))}
+                        required={field.required}
+                      />
+                    </div>
+                  );
+
+                case 'review':
+                  return   (
+                    <div key={field.name} className="space-y-2">
+                      <Label htmlFor="review">Review</Label>
+                      <Textarea
+                        id="review"
+                        value={formData.review || ''}
+                        onChange={(e) => setFormData(prev => ({
+                          ...prev,
+                          review: e.target.value
+                        }))}
+                        placeholder="Enter your review"
+                        className="h-24"
+                        required={field.required}
+                      />
+                    </div>
+                  );
+
+                default:
+                  return null;
+              }
+            })
+            ) : (
+            <div>No fields configured</div>
+          )}
 
             <Button
               type="submit"

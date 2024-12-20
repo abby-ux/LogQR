@@ -105,28 +105,68 @@ const ViewReview = () => {
 
           {/* Review Field Values */}
           <div className="space-y-4">
-            {review.field_values.map((field, index) => (
-              <div key={index} className="space-y-2">
-                <h3 className="font-medium capitalize">{field.field_name}</h3>
-                
-                {field.field_name === 'photo' ? (
-                  field.file_url ? (
-                    <div className="rounded-lg overflow-hidden border">
-                      <img 
-                        src={field.file_url} 
-                        alt="Review" 
-                        className="max-w-full h-auto"
-                      />
-                    </div>
-                  ) : (
-                    <p className="text-gray-500 italic">No photo provided</p>
-                  )
-                ) : (
-                  <p className="text-gray-700">{field.field_value}</p>
-                )}
-              </div>
-            ))}
+  {review.field_values.map((field, index) => {
+    const cleanFieldValue = () => {
+      if (field.field_name === 'timeSpent') {
+        try {
+          const timeObj = JSON.parse(field.field_value);
+          return `${timeObj.value} ${timeObj.unit}`;
+        } catch {
+          return field.field_value;
+        }
+      }
+
+      // For visitReasons and topicsPondered, remove brackets and quotes
+      if (field.field_name === 'visitReasons' || field.field_name === 'topicsPondered') {
+        return field.field_value
+          .replace(/[{}]/g, '') // Remove curly braces
+          .split(',') // Split into array
+          .map(item => item.trim().replace(/"/g, '')); // Remove quotes and trim whitespace
+      }
+
+      return field.field_value;
+    };
+
+    const renderFieldValue = () => {
+      if (field.field_name === 'photo') {
+        return field.file_url ? (
+          <div className="rounded-lg overflow-hidden border">
+            <img
+              src={field.file_url}
+              alt="Review"
+              className="max-w-full h-auto"
+            />
           </div>
+        ) : (
+          <p className="text-gray-500 italic">No photo provided</p>
+        );
+      }
+
+      const value = cleanFieldValue();
+
+      if (Array.isArray(value)) {
+        return (
+          <ul className="list-disc pl-5 space-y-1">
+            {value.map((item, idx) => (
+              <li key={idx} className="text-gray-700 capitalize">{item}</li>
+            ))}
+          </ul>
+        );
+      }
+
+      return <p className="text-gray-700">{value}</p>;
+    };
+
+    return (
+      <div key={index} className="space-y-2">
+        <h3 className="font-medium capitalize">
+          {field.field_name.replace(/([A-Z])/g, ' $1').toLowerCase()}
+        </h3>
+        {renderFieldValue()}
+      </div>
+    );
+  })}
+</div>
         </CardContent>
 
         <CardFooter className="flex justify-between">

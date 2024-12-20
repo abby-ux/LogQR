@@ -31,7 +31,8 @@ CREATE TABLE log_fields (
     is_enabled BOOLEAN DEFAULT true,
     is_required BOOLEAN DEFAULT false,
     display_order INTEGER NOT NULL,
-    CONSTRAINT valid_field_name CHECK (field_name IN ('name', 'photo', 'review', 'note'))
+    CONSTRAINT valid_field_name CHECK (field_name IN ('name', 'photo', 'review', 'note',
+    'visitReasons', 'timeSpent', 'topicsPondered', 'finalNotes'))
 );
 
 -- Create the reviews table
@@ -54,7 +55,8 @@ CREATE TABLE review_field_values (
     field_value TEXT,
     file_url TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT valid_field_name_review CHECK (field_name IN ('name', 'photo', 'review', 'note'))
+    CONSTRAINT valid_field_name_review CHECK (field_name IN ('name', 'photo', 'review', 'note',
+    'visitReasons', 'timeSpent', 'topicsPondered', 'finalNotes'))
 );
 
 -- Create indexes after all tables exist

@@ -138,7 +138,7 @@ router.post('/logs', auth, async (req, res) => {
                 VALUES ($1, $2, $3, $4, $5)`,
                 [logId, field.name, field.enabled, field.required, i]
             );
-        }
+        } 
 
         await client.query('COMMIT');
         res.json({ logId, qrCodeUrl });
@@ -260,6 +260,8 @@ router.post('/logs/:logId/reviews', upload.single('photo'), async (req, res) => 
     const clientIp = req.ip; // get the IP address to prevent spam
 
     try {
+        console.log('Received review data:', reviewData);
+        console.log('Received review data name:', reviewData.name);
         // check for the rate limit
         const recentReviews = await db.query(
             'SELECT COUNT(*) FROM reviews WHERE log_id = $1 AND ip_address = $2 AND submitted_at > NOW() - INTERVAL \'1 day\'',

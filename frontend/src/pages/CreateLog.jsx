@@ -17,13 +17,82 @@ const CreateLog = () => {
   // Form state
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+
+  const [visitReasons, setVisitReasons] = useState({
+    usual: false,
+    injury: false,
+    pills: false,
+    teeth: false,
+    bored: false,
+    curious: false,
+    phoneConvo: false,
+    crying: false,
+    break: false,
+    mouthwash: false,
+    sick: false,
+    tissue: false,
+    other: false
+  });
+
+  // Mirror gazing time state
+  const [timeValue, setTimeValue] = useState('');
+  const [timeUnit, setTimeUnit] = useState('minutes');
+
+  // Topics pondered state
+  const [topics, setTopics] = useState({
+    past: false,
+    future: false,
+    morality: false,
+    butts: false,
+    love: false,
+    money: false,
+    politics: false,
+    weekend: false,
+    work: false,
+    aliens: false,
+    garlicBread: false,
+    business: false,
+    other: false
+  });
+
+  // Final notes state
+  const [finalNotes, setFinalNotes] = useState('');
+
   // array of objects that define the log form structure
   // set fields function lets the user update the entire log config at once
   const [fields, setFields] = useState([
     { name: 'name', enabled: true, required: true },
-    { name: 'photo', enabled: false, required: false },
-    { name: 'review', enabled: true, required: true },
-    { name: 'note', enabled: false, required: false }
+    { name: 'photo', enabled: true, required: false },
+    { name: 'review', enabled: false, required: false },
+    { name: 'note', enabled: false, required: false },
+    {
+      name: 'visitReasons',
+      enabled: true,
+      required: false,
+      type: 'checkbox',
+      options: visitReasons
+    },
+    {
+      name: 'timeSpent',
+      enabled: true,
+      required: false,
+      type: 'duration',
+      value: { value: timeValue, unit: timeUnit }
+    },
+    {
+      name: 'topicsPondered',
+      enabled: true,
+      required: false,
+      type: 'checkbox',
+      options: topics
+    },
+    {
+      name: 'finalNotes',
+      enabled: true,
+      required: false,
+      type: 'textarea',
+      value: finalNotes
+    }
   ]);
 
   // update the log config details. 
