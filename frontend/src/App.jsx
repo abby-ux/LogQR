@@ -53,6 +53,7 @@ export default function App() {
             <Route path="/logs/:logId/reviews" element={<ViewLog />} />
             <Route path="/review/:logId" element={<ReviewForm />} />
             <Route path="/logs/:logId/reviews/:reviewId" element={<ViewReview />} />
+            <Route path="/logs/:logId/edit" element={<CreateLog />} />
           </Route>
         </Route>
       </Routes>

@@ -13,7 +13,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "../components/ui/alert-dialog";
-import { AlertCircle, Clock, User, MessageSquare, ChevronRight, Filter, Trash2 } from 'lucide-react';
+import { AlertCircle, Clock, User, MessageSquare, ChevronRight, Filter, Trash2, Pencil  } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -76,6 +76,11 @@ const ViewLogs = () => {
     } catch (err) {
       setError(err.message);
     }
+  };
+
+  const handleEditClick = (e, logId) => {
+    e.stopPropagation(); // Prevent log click event
+    navigate(`/logs/${logId}/edit`);
   };
 
   useEffect(() => {
@@ -206,6 +211,14 @@ const ViewLogs = () => {
                           </div>
                         </div>
                         <div className="flex items-center space-x-4">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="text-blue-500 hover:text-blue-600 hover:bg-blue-50"
+                            onClick={(e) => handleEditClick(e, log.log_id)}
+                          >
+                            <Pencil className="h-5 w-5" />
+                          </Button>
                           <Button
                             variant="ghost"
                             size="icon"

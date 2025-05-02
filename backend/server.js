@@ -5,14 +5,14 @@ require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const express = require('express');
 const cors = require('cors');
-const db = require('./db/index');  // Fix db path
-const apiRoutes = require('./routes/api'); // Add this line
+const db = require('./db/index'); 
+const apiRoutes = require('./routes/api'); 
 
 
 const app = express();
 
 app.use(cors({
-    origin: 'http://localhost:3000', // Your React app's URL
+    origin: 'http://localhost:3000', 
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization']
   }));

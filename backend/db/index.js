@@ -25,7 +25,7 @@ const createConfig = () => {
 // Initialize the pool with our validated configuration
 const pool = new Pool(createConfig());
 
-// Export both the pool and our helper functions
+// Export both the pool and helper functions
 module.exports = {
     query: (text, params) => pool.query(text, params),
     pool, // Now we're explicitly exporting the pool

@@ -7,7 +7,7 @@ export default function Layout() {
   
   // Add paths where you don't want the navbar to show
   const hideNavbarPaths = [
-    '/review/:logId', // for the review submission form
+    '/review/', // for the review submission form
   ];
 
   // Check if current path should hide navbar

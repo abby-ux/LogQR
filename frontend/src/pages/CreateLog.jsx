@@ -1,20 +1,25 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { Loader2 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card'; // to create a card layout
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
 import { Checkbox } from '../components/ui/checkbox';
 import { Label } from '../components/ui/label';
-import { useNavigate } from 'react-router-dom';
-import { AlertCircle } from "lucide-react"
+import { useNavigate, useParams } from 'react-router-dom';
+import { AlertCircle, ListOrderedIcon } from "lucide-react"
 import { Alert, AlertDescription } from '../components/ui/alert';
 
 const CreateLog = () => {
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false); // tracks if the form is currently being submitted
   const [error, setError] = useState(''); // to show validation or server errors
+  const { logId } = useParams();
+  const isEditing = !!logId;
+  const [isLoading, setIsLoading] = useState(isEditing); // we need to load the prior form data if just editing
   
-  // Form state
+  // Form state for the form field options
+  // the form structure is defined with a complex object/array
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
 
@@ -95,7 +100,51 @@ const CreateLog = () => {
     }
   ]);
 
-  // update the log config details. 
+  // Fetch existing log data if editing
+  useEffect(() => {
+    const fetchLogData = async () => {
+      if (!isEditing) return;
+
+      try {
+        const response = await fetch(`/api/logs/${logId}/config`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch log details');
+        }
+
+        // store form config data for repsonse in a json object
+        const data = await response.json();
+        
+        // Populate form with existing data
+        setTitle(data.title);
+        setDescription(data.description);
+        
+        // Map existing fields to form state
+        const existingFields = fields.map(field => {
+          const existingField = data.fields.find(f => f.name === field.name);
+          return existingField ? {
+            name: field.name,
+            enabled: true,
+            required: existingField.required
+          } : field;
+        });
+        
+        setFields(existingFields);
+      } catch (err) {
+        setError('Failed to load log data: ' + err.message);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchLogData();
+  }, [logId, isEditing]);
+
+  // update the log config details. - actually doesnt update the array, but creates a new one
   // takes in the index of the field the user is changing, and the property user is changing
   const handleFieldChange = (index, property) => {
     // use setFields function to update the state
@@ -120,61 +169,84 @@ const CreateLog = () => {
     setIsSubmitting(true);
     setError('');
 
-    // Log the request payload for debugging
-    const requestPayload = {
-      title,
-      description,
-      fields: fields.filter(field => field.enabled)
-    };
-    console.log('Sending request with payload:', requestPayload);
+    // Validate form
+    if (!title.trim()) {
+      setError('Title is required');
+      setIsSubmitting(false);
+      return;
+    }
+
+    // Only include enabled fields
+    const enabledFields = fields.filter(field => field.enabled);
+    if (enabledFields.length === 0) {
+      setError('At least one field must be enabled');
+      setIsSubmitting(false);
+      return;
+    }
 
     try {
-      // Use the environment variable to construct the full URL
-      const apiUrl = `${process.env.REACT_APP_API_URL}/api/logs`;
-      console.log('Making request to:', apiUrl);
+      const endpoint = isEditing ? `http://localhost:5000/api/logs/${logId}` : 'http://localhost:5000/api/logs';
+      const method = isEditing ? 'PUT' : 'POST';
 
-      const response = await fetch(apiUrl, {
-        method: 'POST',
+      const response = await fetch(endpoint, {
+        method,
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
-        body: JSON.stringify(requestPayload)
+        body: JSON.stringify({
+          title,
+          description,
+          fields: enabledFields
+        })
       });
 
-      console.log('Response status:', response.status);
-
       if (!response.ok) {
-        const errorData = await response.json().catch(e => ({ error: 'No error details available' }));
-        console.error('Error response:', errorData);
-        throw new Error(errorData.error || `Server responded with status ${response.status}`);
+        throw new Error(isEditing ? 'Failed to update log' : 'Failed to create log');
       }
 
       const data = await response.json();
-      console.log('Success response:', data);
-      navigate(`/logs/${data.logId}`, { state: { qrCodeUrl: data.qrCodeUrl } });
+      // Navigate to the log view page
+      navigate(`/logs/${isEditing ? logId : data.logId}`, { 
+        state: { qrCodeUrl: data.qrCodeUrl }
+      });
     } catch (err) {
-      console.error('Full error details:', err);
       setError(err.message);
     } finally {
       setIsSubmitting(false);
     }
 };
 
+if (isLoading) {
+  return (
+    <div className="container mx-auto max-w-2xl py-8">
+      <Card>
+        <CardContent className="p-8 flex justify-center items-center">
+          <Loader2 className="h-6 w-6 animate-spin" />
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
   return (
     <div className="container mx-auto max-w-2xl py-8">
       <Card>
         <CardHeader>
-          <CardTitle>Create New Log</CardTitle>
+          <CardTitle>{isEditing ? 'Edit Log' : 'Create New Log'}</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
-            {error && (
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
+          {error && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                {error === 'Invalid token' 
+                  ? 'Session expired. Please sign in first.'
+                  :  error}
+              </AlertDescription>
+            </Alert>
+          )}
             
             <div className="space-y-2">
               <Label htmlFor="title">Title</Label>
@@ -231,7 +303,14 @@ const CreateLog = () => {
               className="w-full"
               disabled={isSubmitting}
             >
-              {isSubmitting ? 'Creating...' : 'Create Log'}
+              {isSubmitting ? (
+                <div className="flex items-center space-x-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>{isEditing ? 'Updating...' : 'Creating...'}</span>
+                </div>
+              ) : (
+                isEditing ? 'Update Log' : 'Create Log'
+              )}
             </Button>
           </form>
         </CardContent>

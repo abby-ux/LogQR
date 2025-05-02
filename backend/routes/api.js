@@ -4,7 +4,9 @@ const router = express.Router();
 const admin = require('firebase-admin');
 const { auth } = require('../middleware/firebaseAuth');
 const multer = require('multer');
-const upload = multer({ dest: 'uploads/' });
+// for route that handles review submissions - upload.single('photo')
+// for deployment - would be better to store files in firebase/cloud storage service
+const upload = multer({ dest: 'uploads/' }); // middleware to store uploaded files in /uploads dir
 const qrcode = require('qrcode');
 
 // Authentication Routes
@@ -41,15 +43,6 @@ router.post('/verify', async (req, res) => {
 
         // Add logging for database operation
         console.log('Attempting database operation for:', { email, name });
-
-
-        // const exists = await db.query(
-        //     `SELECT * FROM users WHERE user_id = $1`,
-        //     [decodedToken]
-        // );
-
-
-
 
         const result = await db.query(
             `INSERT INTO users (user_id, email, name, last_login_time) 
@@ -90,6 +83,7 @@ router.post('/verify', async (req, res) => {
 // creates a POST endpoint at logs. 'auth' ensures only authenicated users can create logs
 // make async because of the multiple db operations
 router.post('/logs', auth, async (req, res) => {
+    // get the parts of the log from the request body
     const { title, description, fields } = req.body;
     const userId = req.user.uid;
     const userEmail = req.user.email || '';
@@ -119,6 +113,7 @@ router.post('/logs', auth, async (req, res) => {
             'INSERT INTO logs (user_id, title, description) VALUES ($1, $2, $3) RETURNING log_id',
             [userId, title, description]
         );
+        // get log id from the retured value of the above query
         const logId = logResult.rows[0].log_id;
 
         // Generate the QR code for this log
@@ -139,8 +134,9 @@ router.post('/logs', auth, async (req, res) => {
                 [logId, field.name, field.enabled, field.required, i]
             );
         } 
-
+        // commit transaction
         await client.query('COMMIT');
+        // return a json object with the log id and qr code url
         res.json({ logId, qrCodeUrl });
 
     } catch (error) {
@@ -523,6 +519,160 @@ router.delete('/logs/:logId', auth, async (req, res) => {
     } catch (error) {
         console.error('Error deleting log:', error);
         res.status(500).json({ error: 'Failed to delete log' });
+    }
+});
+
+router.put('/logs/:logId', auth, async (req, res) => {
+    const { logId } = req.params;
+    const { title, description, fields } = req.body;
+    const userId = req.user.uid;
+
+    try {
+        // Get connection from the pool
+        const client = await db.pool.connect();
+
+        try {
+            // Start transaction
+            await client.query('BEGIN');
+
+            // First verify that the log belongs to the user
+            const verifyOwnership = await client.query(
+                'SELECT user_id FROM logs WHERE log_id = $1',
+                [logId]
+            );
+
+            if (verifyOwnership.rows.length === 0) {
+                throw new Error('Log not found');
+            }
+
+            if (verifyOwnership.rows[0].user_id !== userId) {
+                throw new Error('Unauthorized to edit this log');
+            }
+
+            // Update the main log information
+            await client.query(
+                'UPDATE logs SET title = $1, description = $2 WHERE log_id = $3',
+                [title, description, logId]
+            );
+
+            // Delete existing field configurations
+            await client.query(
+                'DELETE FROM log_fields WHERE log_id = $1',
+                [logId]
+            );
+
+            // Insert updated field configurations
+            for (const [index, field] of fields.entries()) {
+                await client.query(
+                    'INSERT INTO log_fields (log_id, field_name, is_enabled, is_required, display_order) VALUES ($1, $2, $3, $4, $5)',
+                    [logId, field.name, field.enabled, field.required, index]
+                );
+            }
+
+            // Commit transaction
+            await client.query('COMMIT');
+
+            // Get the existing QR code URL
+            const qrResult = await client.query(
+                'SELECT qr_code_url FROM logs WHERE log_id = $1',
+                [logId]
+            );
+
+            res.json({ 
+                logId,
+                qrCodeUrl: qrResult.rows[0].qr_code_url,
+                message: 'Log updated successfully' 
+            });
+
+        } catch (error) {
+            // Rollback in case of error
+            await client.query('ROLLBACK');
+            throw error;
+        } finally {
+            // Release the client back to the pool
+            client.release();
+        }
+    } catch (error) {
+        console.error('Failed to update log:', error);
+        res.status(error.message.includes('Unauthorized') ? 403 : 500)
+           .json({ error: error.message || 'Failed to update log' });
+    }
+});
+
+router.put('/logs/:logId', auth, async (req, res) => {
+    const { logId } = req.params;
+    const { title, description, fields } = req.body;
+    const userId = req.user.uid;
+
+    try {
+        // Get connection from the pool
+        const client = await db.pool.connect();
+
+        try {
+            // Start transaction
+            await client.query('BEGIN');
+
+            // First verify that the log belongs to the user
+            const verifyOwnership = await client.query(
+                'SELECT user_id FROM logs WHERE log_id = $1',
+                [logId]
+            );
+
+            if (verifyOwnership.rows.length === 0) {
+                throw new Error('Log not found');
+            }
+
+            if (verifyOwnership.rows[0].user_id !== userId) {
+                throw new Error('Unauthorized to edit this log');
+            }
+
+            // Update the main log information
+            await client.query(
+                'UPDATE logs SET title = $1, description = $2 WHERE log_id = $3',
+                [title, description, logId]
+            );
+
+            // Delete existing field configurations
+            await client.query(
+                'DELETE FROM log_fields WHERE log_id = $1',
+                [logId]
+            );
+
+            // Insert updated field configurations
+            for (const field of fields) {
+                await client.query(
+                    'INSERT INTO log_fields (log_id, field_name, is_enabled, is_required, display_order) VALUES ($1, $2, $3, $4, $5)',
+                    [logId, field.name, field.enabled, field.required, fields.indexOf(field)]
+                );
+            }
+
+            // Commit transaction
+            await client.query('COMMIT');
+
+            // Get the existing QR code URL
+            const qrResult = await client.query(
+                'SELECT qr_code_url FROM logs WHERE log_id = $1',
+                [logId]
+            );
+
+            res.json({ 
+                logId,
+                qrCodeUrl: qrResult.rows[0].qr_code_url,
+                message: 'Log updated successfully' 
+            });
+
+        } catch (error) {
+            // Rollback in case of error
+            await client.query('ROLLBACK');
+            throw error;
+        } finally {
+            // Release the client back to the pool
+            client.release();
+        }
+    } catch (error) {
+        console.error('Failed to update log:', error);
+        res.status(error.message.includes('Unauthorized') ? 403 : 500)
+           .json({ error: error.message || 'Failed to update log' });
     }
 });
 

@@ -8,7 +8,6 @@ module.exports = function(app) {
     createProxyMiddleware({
       target: 'http://localhost:5000',
       changeOrigin: true,
-      // Add logging to help us debug
       onProxyReq: (proxyReq, req, res) => {
         console.log('Proxying request to:', proxyReq.path);
       },
